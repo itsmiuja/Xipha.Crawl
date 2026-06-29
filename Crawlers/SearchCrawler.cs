@@ -17,8 +17,8 @@ public class SearchCrawler
     }
 
     /// <summary>
-    /// یک keyword را سرچ کرده و لیست داروها را برمی‌گرداند.
-    /// در صورت خطا تا MaxRetries بار تلاش می‌کند.
+    /// Searches for a single keyword and returns the list of matching drugs.
+    /// Retries up to MaxRetries times on failure.
     /// </summary>
     public async Task<List<DrugBasic>> CrawlAsync(string term, CancellationToken ct = default)
     {
@@ -34,7 +34,7 @@ public class SearchCrawler
                 await Task.Delay(_config.RetryDelayMs * attempt, ct);
             }
         }
-        return []; // بعد از همه تلاش‌ها
+        return []; // all retries exhausted
     }
 
     private async Task<string> FetchAsync(string term, CancellationToken ct)

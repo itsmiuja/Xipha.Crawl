@@ -1,15 +1,14 @@
 ﻿namespace Xipha.Crawl.Models
 {
-
     /// <summary>
-    /// یک رکورد قیمت — هر بار که قیمت تغییر کند یه ردیف جدید اضافه می‌شود.
+    /// A price snapshot — a new row is inserted every time the price changes.
     /// </summary>
     public class PriceRecord
     {
         public int WebId { get; set; }
-        public long PackagePrice { get; set; }  // قیمت هر بسته (از سایت)
-        public long UnitPrice { get; set; }  // قیمت واحد (محاسبه‌شده یا از Detail)
-        public int UnitCount { get; set; }  // تعداد در بسته
+        public long PackagePrice { get; set; }  // price per package (from site)
+        public long UnitPrice { get; set; }     // per-unit price (calculated or from detail page)
+        public int UnitCount { get; set; }      // units per package
         public string Source { get; set; } = "search"; // "search" | "detail"
         public DateTime RecordedAt { get; set; } = DateTime.UtcNow;
     }

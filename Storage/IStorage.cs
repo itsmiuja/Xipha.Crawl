@@ -4,27 +4,27 @@ namespace Xipha.Crawl.Storage;
 
 public interface IStorage
 {
-    /// <summary>ساخت جداول در صورت نبود</summary>
+    /// <summary>Creates tables if they do not already exist</summary>
     Task InitializeAsync();
 
     /// <summary>
-    /// ذخیره نتایج جستجو — رکوردهای تکراری نادیده گرفته می‌شوند.
-    /// برمی‌گرداند: WebId های جدید اضافه‌شده در این فراخوانی
+    /// Saves search results — duplicate records are silently ignored.
+    /// Returns the WebIds of records newly inserted during this call.
     /// </summary>
     Task<List<int>> SaveSearchResultsAsync(IEnumerable<DrugBasic> drugs);
 
-    /// <summary>ذخیره جزئیات کامل یک دارو + علامت‌گذاری IsDetailScraped</summary>
+    /// <summary>Saves full detail for a single drug and sets IsDetailScraped = 1</summary>
     Task<int> SaveDetailAsync(DrugDetail detail);
 
     /// <summary>
-    /// ذخیره قیمت — فقط اگر قیمت نسبت به آخرین رکورد تغییر کرده باشد.
-    /// فقط برای داروهایی که در جدول Drugs موجودند.
+    /// Saves a price record — only if the price has changed since the last entry.
+    /// Only applies to drugs already present in the Drugs table.
     /// </summary>
     Task<int> SavePricesAsync(IEnumerable<PriceRecord> records);
 
-    /// <summary>DetailUrl داروهای مشخص‌شده که هنوز IsDetailScraped = 0 دارند</summary>
+    /// <summary>Returns DetailUrls for the given WebIds that still have IsDetailScraped = 0</summary>
     Task<IEnumerable<string>> GetDetailUrlsByWebIdsAsync(IEnumerable<int> webIds);
 
-    /// <summary>آمار کلی: (کل رکوردها، تعداد با Detail)</summary>
+    /// <summary>Overall stats: (total records, records that have detail data)</summary>
     Task<(int Total, int WithDetail)> GetStatsAsync();
 }

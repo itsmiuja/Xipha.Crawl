@@ -17,8 +17,8 @@ public class DetailCrawler
     }
 
     /// <summary>
-    /// صفحه جزئیات یک دارو را دریافت و پارس می‌کند.
-    /// در صورت شکست پس از MaxRetries تلاش، null برمی‌گرداند.
+    /// Fetches and parses the detail page for a single drug.
+    /// Returns null if all MaxRetries attempts fail.
     /// </summary>
     public async Task<DrugDetail?> CrawlAsync(string detailUrl, CancellationToken ct = default)
     {

@@ -2,7 +2,7 @@
 
 public static class SearchTerms
 {
-    /// پیشوندهای لاتین — پوشش نام‌های انگلیسی و برند
+    /// Latin prefixes — covers English and brand drug names
     public static readonly IReadOnlyList<string> Latin =
     [
         "ac","al","am","ap","ar","as","at","az",
@@ -28,7 +28,7 @@ public static class SearchTerms
         "wa","zo"
     ];
 
-    /// پیشوندهای فارسی — پوشش نام‌های فارسی دارو
+    /// Persian prefixes — covers Persian drug names
     public static readonly IReadOnlyList<string> Persian =
     [
         "آ","اب","اد","ار","از","اس","اف","اک","ال","ام","ان","اه","ای",
@@ -46,6 +46,6 @@ public static class SearchTerms
         "وا","هی","یو"
     ];
 
-    /// هر دو مجموعه با هم (~۲۳۰ ترم)
+    /// Both sets combined (~230 terms)
     public static IEnumerable<string> All => Latin.Concat(Persian);
 }

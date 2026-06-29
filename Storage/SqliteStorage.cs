@@ -18,7 +18,7 @@ public class SqliteStorage : IStorage
         await using var conn = Open();
         await conn.OpenAsync();
 
-        // اطلاعات پایه دارو (بدون قیمت)
+        // Basic drug information (no prices)
         await Exec(conn, @"
             CREATE TABLE IF NOT EXISTS Drugs (
                 Id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +37,7 @@ public class SqliteStorage : IStorage
                 ScrapedAt          DATETIME DEFAULT CURRENT_TIMESTAMP
             );");
 
-        // جزئیات کامل (بدون فیلدهای بالینی و بدون قیمت)
+        // Full detail record (no clinical fields, no prices)
         await Exec(conn, @"
             CREATE TABLE IF NOT EXISTS DrugDetails (
                 WebId         INTEGER PRIMARY KEY,
@@ -60,7 +60,7 @@ public class SqliteStorage : IStorage
                 FOREIGN KEY (WebId) REFERENCES Drugs(WebId)
             );");
 
-        // تاریخچه قیمت — هر تغییر قیمت یه ردیف جدید
+        // Price history — a new row is inserted on every price change
         await Exec(conn, @"
             CREATE TABLE IF NOT EXISTS PriceHistory (
                 Id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -177,9 +177,9 @@ public class SqliteStorage : IStorage
 
         int count = 0;
 
-        // فقط اگر:
-        //   ۱. دارو در جدول Drugs وجود دارد
-        //   ۲. قیمت نسبت به آخرین رکورد تغییر کرده (یا هیچ رکوردی ندارد)
+        // Insert only when:
+        //   1. The drug already exists in the Drugs table
+        //   2. The price differs from the most recent entry (or no entry exists yet)
         const string sql = @"
             INSERT INTO PriceHistory (WebId, PackagePrice, UnitPrice, UnitCount, Source)
             SELECT @WebId, @PackagePrice, @UnitPrice, @UnitCount, @Source
@@ -215,7 +215,7 @@ public class SqliteStorage : IStorage
 
         var allUrls = new List<string>();
 
-        // SQLite parameter limit ~999 — chunk به ۵۰۰
+        // SQLite parameter limit is ~999 — process in chunks of 500
         foreach (var chunk in ids.Chunk(500))
         {
             await using var conn = Open();

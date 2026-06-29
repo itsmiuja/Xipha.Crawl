@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Xipha.Crawl.Models
+﻿namespace Xipha.Crawl.Models
 {
     public class DrugBasic
     {
@@ -14,13 +8,13 @@ namespace Xipha.Crawl.Models
         public string LicenseHolder { get; set; } = "";
         public long Price { get; set; }
         public string Packaging { get; set; } = "";
-        public string ProductCode { get; set; } = "";   // کد فرآورده
-        public string GenericCode { get; set; } = "";   // کد ژنریک
+        public string ProductCode { get; set; } = "";   // product code
+        public string GenericCode { get; set; } = "";   // generic code
         public string DetailUrl { get; set; } = "";
         public string SearchTermUsed { get; set; } = "";
         public bool IsEmergencyLicense { get; set; }
 
-        /// <summary>شناسه عددی از انتهای DetailUrl</summary>
+        /// <summary>Numeric ID extracted from the trailing segment of DetailUrl</summary>
         public int WebId
         {
             get

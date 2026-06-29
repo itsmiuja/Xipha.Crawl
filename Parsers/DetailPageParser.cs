@@ -14,30 +14,30 @@ public class DetailPageParser
 
         var drug = new DrugDetail { DetailUrl = detailUrl };
 
-        // WebId از URL
+        // WebId from URL trailing segment
         var seg = detailUrl.TrimEnd('/').Split('/');
         if (int.TryParse(seg[^1], out int id)) drug.WebId = id;
 
-        // ── مشخصات اصلی ──────────────────────────────────────
-        drug.BrandName = ByLabel(doc, "نام :");
-        drug.GenericName = ByLabelBdo(doc, "نام عمومی");
-        drug.DrugForm = ByLabel(doc, "شکل دارویی");
-        drug.RouteOfAdmin = ByLabelBdo(doc, "نحوه مصرف");
+        // ── Core properties ──────────────────────────────────
+        drug.BrandName     = ByLabel(doc, "نام :");
+        drug.GenericName   = ByLabelBdo(doc, "نام عمومی");
+        drug.DrugForm      = ByLabel(doc, "شکل دارویی");
+        drug.RouteOfAdmin  = ByLabelBdo(doc, "نحوه مصرف");
         drug.LicenseHolder = ByLabelClass(doc, "صاحب پروانه", "txtSearch1");
-        drug.BrandOwner = BrandOwnerClean(doc);
-        drug.Manufacturer = ByLabel(doc, "تولید کننده");
+        drug.BrandOwner    = BrandOwnerClean(doc);
+        drug.Manufacturer  = ByLabel(doc, "تولید کننده");
         drug.LicenseExpiry = ByLabel(doc, "تاریخ اعتبار پروانه");
-        drug.Packaging = ByLabelBdo(doc, "تعداد در بسته");
-        drug.Composition = ByLabel(doc, "ترکیبات");
+        drug.Packaging     = ByLabelBdo(doc, "تعداد در بسته");
+        drug.Composition   = ByLabel(doc, "ترکیبات");
 
-        // ── قیمت‌ها ───────────────────────────────────────────
+        // ── Prices ───────────────────────────────────────────
         var prices = doc.DocumentNode.SelectNodes("//span[contains(@class,'priceTxt')]");
         if (prices?.Count >= 1) drug.PackagePrice = ParsePrice(prices[0].InnerText);
-        if (prices?.Count >= 2) drug.UnitPrice = ParsePrice(prices[1].InnerText);
+        if (prices?.Count >= 2) drug.UnitPrice    = ParsePrice(prices[1].InnerText);
 
-        // ── کدها ─────────────────────────────────────────────
+        // ── Codes ────────────────────────────────────────────
         drug.GTIN = ByLabelEng(doc, ":GTIN");
-        drug.IRC = ByLabelEng(doc, ":IRC");
+        drug.IRC  = ByLabelEng(doc, ":IRC");
 
         // ── ATC ──────────────────────────────────────────────
         drug.ATCCode = doc.DocumentNode
@@ -45,8 +45,8 @@ public class DetailPageParser
             ?.InnerText.Trim() ?? "";
         drug.ATCHierarchy = ParseATCHierarchy(doc);
 
-        // فیلدهای بالینی (موارد مصرف، عوارض و ...) استخراج نمی‌شوند
-        // چون بین تمام داروهای یک جنریک تکراری‌اند و حجم را بالا می‌برند.
+        // Clinical fields (indications, side effects, etc.) are intentionally not extracted —
+        // they are identical for all brands sharing the same generic and would inflate storage.
 
         return drug;
     }
@@ -82,6 +82,7 @@ public class DetailPageParser
         var node = doc.DocumentNode
             .SelectSingleNode("//label[contains(text(),'صاحب برند')]/following-sibling::span[1]");
         if (node is null) return "";
+        // Concatenate only text nodes to strip any nested child elements
         return string.Concat(
             node.ChildNodes
                 .Where(n => n.NodeType == HtmlNodeType.Text)

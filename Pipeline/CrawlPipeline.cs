@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using Xipha.Crawl.Crawlers;
+﻿using Xipha.Crawl.Crawlers;
 using Xipha.Crawl.Models;
 using Xipha.Crawl.Parsers;
 using Xipha.Crawl.Storage;
@@ -13,7 +12,7 @@ public class CrawlPipeline
     private readonly IStorage _storage;
     private readonly CrawlerConfig _config;
 
-    // WebId های جدیدی که در اجرای جاری Phase 1 پیدا شدند
+    // WebIds discovered as new during the current Phase 1 run
     private readonly List<int> _sessionNewWebIds = [];
 
     public event Action<string>? OnLog;
@@ -34,8 +33,8 @@ public class CrawlPipeline
     // ── Phase 1: Search ───────────────────────────────────────
 
     /// <summary>
-    /// سرچ با کلیدواژه‌ها — فقط داروهای جدید اضافه می‌شوند.
-    /// قیمت همه داروهای یافت‌شده (جدید و قدیم) ثبت می‌شود اگر تغییر کرده باشد.
+    /// Runs keyword searches — only newly discovered drugs are inserted.
+    /// Prices for all found drugs (new and existing) are recorded if they have changed.
     /// </summary>
     public async Task RunSearchPhaseAsync(
         IEnumerable<string> terms,
@@ -60,7 +59,7 @@ public class CrawlPipeline
                 var newIds = await _storage.SaveSearchResultsAsync(drugs);
                 _sessionNewWebIds.AddRange(newIds);
 
-                // ثبت قیمت برای همه داروهای یافت‌شده (اگر تغییر کرده)
+                // Record prices for all found drugs (if changed)
                 int prices = await _storage.SavePricesAsync(ToPriceRecords(drugs, "search"));
 
                 Log($"[{i}/{list.Count}] {term,-10} → found:{drugs.Count,-5} new:{newIds.Count,-4} Δprice:{prices}");
@@ -80,8 +79,8 @@ public class CrawlPipeline
     // ── Phase 2: Detail ───────────────────────────────────────
 
     /// <summary>
-    /// جزئیات داروها — فقط برای داروهایی که در همین اجرا (Phase 1) جدید بودند.
-    /// داروهایی که قبلاً Detail گرفته شده‌اند کراول نمی‌شوند.
+    /// Fetches detail pages — only for drugs newly added in Phase 1 of this run.
+    /// Drugs that already have detail data are skipped.
     /// </summary>
     public async Task RunDetailPhaseAsync(CancellationToken ct = default)
     {
@@ -113,7 +112,7 @@ public class CrawlPipeline
                     {
                         await _storage.SaveDetailAsync(detail);
 
-                        // ثبت قیمت دقیق از صفحه Detail (اگر تغییر کرده)
+                        // Record exact price from the detail page (if changed)
                         if (detail.PackagePrice > 0)
                             await _storage.SavePricesAsync([DetailToPriceRecord(detail)]);
 
@@ -143,9 +142,9 @@ public class CrawlPipeline
     // ── Price Update ──────────────────────────────────────────
 
     /// <summary>
-    /// فقط قیمت‌ها را بروز می‌کند — از نتایج سرچ (بدون ورود به صفحه Detail).
-    /// فقط برای داروهایی که از قبل در دیتابیس هستند.
-    /// قیمت واحد از روی قیمت بسته و تعداد محاسبه می‌شود.
+    /// Updates prices only — from search results, without visiting detail pages.
+    /// Only applies to drugs already present in the database.
+    /// Unit price is derived from package price and unit count.
     /// </summary>
     public async Task RunPriceUpdateAsync(
         IEnumerable<string> terms,
@@ -167,8 +166,7 @@ public class CrawlPipeline
             try
             {
                 var drugs = await _searchCrawler.CrawlAsync(term, ct);
-                // SaveSearchResultsAsync = نادیده گرفتن داروهای جدید (INSERT OR IGNORE)
-                // فقط قیمت‌ها مهم هستند
+                // New drugs are silently ignored by INSERT OR IGNORE — only prices matter here
                 int updated = await _storage.SavePricesAsync(ToPriceRecords(drugs, "search"));
                 totalUpdated += updated;
 
@@ -186,9 +184,9 @@ public class CrawlPipeline
         Log($"✅ Price Update done — {totalUpdated} price changes recorded");
     }
 
-    // ── Full Pipelines ────────────────────────────────────────
+    // ── Full Pipeline ─────────────────────────────────────────
 
-    /// <summary>Phase 1 + Phase 2 — کراول کامل</summary>
+    /// <summary>Phase 1 + Phase 2 — full crawl</summary>
     public async Task RunAsync(IEnumerable<string> searchTerms, CancellationToken ct = default)
     {
         await RunSearchPhaseAsync(searchTerms, ct);
@@ -206,23 +204,23 @@ public class CrawlPipeline
             .Where(d => d.WebId > 0 && d.Price > 0)
             .Select(d => new PriceRecord
             {
-                WebId = d.WebId,
+                WebId        = d.WebId,
                 PackagePrice = d.Price,
-                UnitCount = PackagingParser.ExtractUnitCount(d.Packaging),
-                UnitPrice = PackagingParser.CalculateUnitPrice(d.Price, d.Packaging),
-                Source = source
+                UnitCount    = PackagingParser.ExtractUnitCount(d.Packaging),
+                UnitPrice    = PackagingParser.CalculateUnitPrice(d.Price, d.Packaging),
+                Source       = source
             });
 
     private static PriceRecord DetailToPriceRecord(DrugDetail d) => new()
     {
-        WebId = d.WebId,
+        WebId        = d.WebId,
         PackagePrice = d.PackagePrice,
-        UnitPrice = d.UnitPrice,
-        // UnitCount محاسبه‌شده از روی Packaging (اگر UnitPrice در دسترس نبود)
-        UnitCount = d.UnitPrice > 0
-                       ? (int)(d.PackagePrice / d.UnitPrice)
-                       : PackagingParser.ExtractUnitCount(d.Packaging),
-        Source = "detail"
+        UnitPrice    = d.UnitPrice,
+        // Derive UnitCount from Packaging when UnitPrice is not available
+        UnitCount    = d.UnitPrice > 0
+                           ? (int)(d.PackagePrice / d.UnitPrice)
+                           : PackagingParser.ExtractUnitCount(d.Packaging),
+        Source       = "detail"
     };
 
     private async Task PrintStats()
