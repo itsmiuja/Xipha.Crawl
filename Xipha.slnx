@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Xipha.Core/Xipha.Core.csproj" />
+    <Project Path="src/Xipha.Crawl.IRC/Xipha.Crawl.IRC.csproj" />
+  </Folder>
+</Solution>
