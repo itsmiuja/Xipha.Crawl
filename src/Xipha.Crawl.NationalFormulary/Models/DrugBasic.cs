@@ -1,4 +1,4 @@
-﻿namespace Xipha.Crawl.Models
+namespace Xipha.Crawl.NationalFormulary.Models
 {
     public class DrugBasic
     {

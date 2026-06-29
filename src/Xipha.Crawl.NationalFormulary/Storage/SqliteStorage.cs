@@ -1,8 +1,8 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
-using Xipha.Crawl.Models;
+using Xipha.Crawl.NationalFormulary.Models;
 
-namespace Xipha.Crawl.Storage;
+namespace Xipha.Crawl.NationalFormulary.Storage;
 
 public class SqliteStorage : IStorage
 {

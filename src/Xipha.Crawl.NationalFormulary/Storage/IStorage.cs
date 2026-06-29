@@ -1,6 +1,6 @@
-﻿using Xipha.Crawl.Models;
+using Xipha.Crawl.NationalFormulary.Models;
 
-namespace Xipha.Crawl.Storage;
+namespace Xipha.Crawl.NationalFormulary.Storage;
 
 public interface IStorage
 {

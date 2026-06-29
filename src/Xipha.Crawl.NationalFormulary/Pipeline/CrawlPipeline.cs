@@ -1,9 +1,9 @@
-﻿using Xipha.Crawl.Crawlers;
-using Xipha.Crawl.Models;
-using Xipha.Crawl.Parsers;
-using Xipha.Crawl.Storage;
+using Xipha.Crawl.NationalFormulary.Crawlers;
+using Xipha.Crawl.NationalFormulary.Models;
+using Xipha.Crawl.NationalFormulary.Parsers;
+using Xipha.Crawl.NationalFormulary.Storage;
 
-namespace Xipha.Crawl.Pipeline;
+namespace Xipha.Crawl.NationalFormulary.Pipeline;
 
 public class CrawlPipeline
 {

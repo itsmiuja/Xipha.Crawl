@@ -1,6 +1,6 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 
-namespace Xipha.Crawl.Parsers;
+namespace Xipha.Crawl.NationalFormulary.Parsers;
 
 /// <summary>
 /// Extracts unit count from a packaging string.

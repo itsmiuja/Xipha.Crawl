@@ -1,4 +1,4 @@
-﻿namespace Xipha.Crawl;
+namespace Xipha.Crawl.NationalFormulary;
 
 public static class SearchTerms
 {

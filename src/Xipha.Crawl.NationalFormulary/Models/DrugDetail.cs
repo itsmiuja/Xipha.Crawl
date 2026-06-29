@@ -1,4 +1,4 @@
-﻿namespace Xipha.Crawl.Models;
+namespace Xipha.Crawl.NationalFormulary.Models;
 
 /// <summary>
 /// Full information for a drug scraped from its Detail page.

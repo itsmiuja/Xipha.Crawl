@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Xipha.Core/Xipha.Core.csproj" />
-    <Project Path="src/Xipha.Crawl.IRC/Xipha.Crawl.IRC.csproj" />
+    <Project Path="src/Xipha.Crawl/Xipha.Crawl.csproj" />
+    <Project Path="src/Xipha.Crawl.NationalFormulary/Xipha.Crawl.NationalFormulary.csproj" />
   </Folder>
 </Solution>

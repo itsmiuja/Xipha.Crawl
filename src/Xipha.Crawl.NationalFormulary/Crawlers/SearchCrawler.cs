@@ -1,7 +1,7 @@
-﻿using Xipha.Crawl.Models;
-using Xipha.Crawl.Parsers;
+using Xipha.Crawl.NationalFormulary.Models;
+using Xipha.Crawl.NationalFormulary.Parsers;
 
-namespace Xipha.Crawl.Crawlers;
+namespace Xipha.Crawl.NationalFormulary.Crawlers;
 
 public class SearchCrawler
 {

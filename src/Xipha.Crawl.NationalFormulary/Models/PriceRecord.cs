@@ -1,4 +1,4 @@
-﻿namespace Xipha.Crawl.Models
+namespace Xipha.Crawl.NationalFormulary.Models
 {
     /// <summary>
     /// A price snapshot — a new row is inserted every time the price changes.

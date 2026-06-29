@@ -1,7 +1,7 @@
-﻿using HtmlAgilityPack;
-using Xipha.Crawl.Models;
+using HtmlAgilityPack;
+using Xipha.Crawl.NationalFormulary.Models;
 
-namespace Xipha.Crawl.Parsers;
+namespace Xipha.Crawl.NationalFormulary.Parsers;
 
 public class DetailPageParser
 {
