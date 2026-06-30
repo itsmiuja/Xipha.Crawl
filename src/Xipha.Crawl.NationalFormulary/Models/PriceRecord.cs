@@ -5,6 +5,7 @@ namespace Xipha.Crawl.NationalFormulary.Models
     /// </summary>
     public class PriceRecord
     {
+        public int Id { get; set; }
         public int WebId { get; set; }
         public long PackagePrice { get; set; }  // price per package (from site)
         public long UnitPrice { get; set; }     // per-unit price (calculated or from detail page)

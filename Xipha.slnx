@@ -3,5 +3,6 @@
     <Project Path="src/Xipha.Core/Xipha.Core.csproj" />
     <Project Path="src/Xipha.Crawl/Xipha.Crawl.csproj" />
     <Project Path="src/Xipha.Crawl.NationalFormulary/Xipha.Crawl.NationalFormulary.csproj" />
+    <Project Path="src/Xipha.Api/Xipha.Api.csproj" />
   </Folder>
 </Solution>

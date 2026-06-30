@@ -253,6 +253,352 @@ public class SqliteStorage : IStorage
         return (r.GetInt32(0), r.GetInt32(1));
     }
 
+    // ── Manual CRUD (used by the REST API) ──────────────────────
+
+    public async Task<(List<DrugRecord> Items, int TotalCount)> GetDrugsAsync(int skip, int take, string? search)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        string where = string.IsNullOrWhiteSpace(search)
+            ? ""
+            : "WHERE PersianName LIKE @s OR EnglishName LIKE @s OR ProductCode LIKE @s OR GenericCode LIKE @s";
+
+        await using var countCmd = new SqliteCommand($"SELECT COUNT(*) FROM Drugs {where};", conn);
+        if (where != "") countCmd.Parameters.AddWithValue("@s", $"%{search}%");
+        int total = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+
+        var sql = $@"
+            SELECT Id, WebId, PersianName, EnglishName, BrandOwner, LicenseHolder,
+                   Packaging, ProductCode, GenericCode, DetailUrl, SearchTermUsed,
+                   IsEmergencyLicense, IsDetailScraped, ScrapedAt
+            FROM Drugs {where}
+            ORDER BY Id DESC
+            LIMIT @take OFFSET @skip;";
+
+        await using var cmd = new SqliteCommand(sql, conn);
+        if (where != "") cmd.Parameters.AddWithValue("@s", $"%{search}%");
+        cmd.Parameters.AddWithValue("@take", take);
+        cmd.Parameters.AddWithValue("@skip", skip);
+
+        var items = new List<DrugRecord>();
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync()) items.Add(ReadDrugRecord(r));
+
+        return (items, total);
+    }
+
+    public async Task<DrugRecord?> GetDrugByIdAsync(int id)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        const string sql = @"
+            SELECT Id, WebId, PersianName, EnglishName, BrandOwner, LicenseHolder,
+                   Packaging, ProductCode, GenericCode, DetailUrl, SearchTermUsed,
+                   IsEmergencyLicense, IsDetailScraped, ScrapedAt
+            FROM Drugs WHERE Id = @Id;";
+
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@Id", id);
+        await using var r = await cmd.ExecuteReaderAsync();
+        return await r.ReadAsync() ? ReadDrugRecord(r) : null;
+    }
+
+    public async Task<int?> CreateDrugAsync(DrugBasic d)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        const string sql = @"
+            INSERT INTO Drugs
+              (WebId, PersianName, EnglishName, BrandOwner, LicenseHolder,
+               Packaging, ProductCode, GenericCode, DetailUrl,
+               SearchTermUsed, IsEmergencyLicense)
+            VALUES
+              (@WebId, @PersianName, @EnglishName, @BrandOwner, @LicenseHolder,
+               @Packaging, @ProductCode, @GenericCode, @DetailUrl,
+               @SearchTermUsed, @IsEmergencyLicense);
+            SELECT last_insert_rowid();";
+
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@WebId", d.WebId);
+        cmd.Parameters.AddWithValue("@PersianName", d.PersianName);
+        cmd.Parameters.AddWithValue("@EnglishName", d.EnglishName);
+        cmd.Parameters.AddWithValue("@BrandOwner", d.BrandOwner);
+        cmd.Parameters.AddWithValue("@LicenseHolder", d.LicenseHolder);
+        cmd.Parameters.AddWithValue("@Packaging", d.Packaging);
+        cmd.Parameters.AddWithValue("@ProductCode", d.ProductCode);
+        cmd.Parameters.AddWithValue("@GenericCode", d.GenericCode);
+        cmd.Parameters.AddWithValue("@DetailUrl", d.DetailUrl);
+        cmd.Parameters.AddWithValue("@SearchTermUsed", string.IsNullOrWhiteSpace(d.SearchTermUsed) ? "manual" : d.SearchTermUsed);
+        cmd.Parameters.AddWithValue("@IsEmergencyLicense", d.IsEmergencyLicense ? 1 : 0);
+
+        try
+        {
+            var result = await cmd.ExecuteScalarAsync();
+            return Convert.ToInt32(result);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19) // UNIQUE constraint failed
+        {
+            return null;
+        }
+    }
+
+    public async Task<bool> UpdateDrugAsync(int id, DrugBasic d)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        const string sql = @"
+            UPDATE Drugs SET
+                WebId = @WebId, PersianName = @PersianName, EnglishName = @EnglishName,
+                BrandOwner = @BrandOwner, LicenseHolder = @LicenseHolder, Packaging = @Packaging,
+                ProductCode = @ProductCode, GenericCode = @GenericCode, DetailUrl = @DetailUrl,
+                IsEmergencyLicense = @IsEmergencyLicense
+            WHERE Id = @Id;";
+
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@Id", id);
+        cmd.Parameters.AddWithValue("@WebId", d.WebId);
+        cmd.Parameters.AddWithValue("@PersianName", d.PersianName);
+        cmd.Parameters.AddWithValue("@EnglishName", d.EnglishName);
+        cmd.Parameters.AddWithValue("@BrandOwner", d.BrandOwner);
+        cmd.Parameters.AddWithValue("@LicenseHolder", d.LicenseHolder);
+        cmd.Parameters.AddWithValue("@Packaging", d.Packaging);
+        cmd.Parameters.AddWithValue("@ProductCode", d.ProductCode);
+        cmd.Parameters.AddWithValue("@GenericCode", d.GenericCode);
+        cmd.Parameters.AddWithValue("@DetailUrl", d.DetailUrl);
+        cmd.Parameters.AddWithValue("@IsEmergencyLicense", d.IsEmergencyLicense ? 1 : 0);
+
+        return await cmd.ExecuteNonQueryAsync() > 0;
+    }
+
+    public async Task<bool> DeleteDrugAsync(int id)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+
+        // DrugDetails/PriceHistory reference WebId, not Id — look it up first
+        int webId;
+        await using (var lookup = new SqliteCommand("SELECT WebId FROM Drugs WHERE Id = @Id", conn, (SqliteTransaction)tx))
+        {
+            lookup.Parameters.AddWithValue("@Id", id);
+            var result = await lookup.ExecuteScalarAsync();
+            if (result is null) { await tx.RollbackAsync(); return false; }
+            webId = Convert.ToInt32(result);
+        }
+
+        await using (var delPrices = new SqliteCommand("DELETE FROM PriceHistory WHERE WebId = @WebId", conn, (SqliteTransaction)tx))
+        {
+            delPrices.Parameters.AddWithValue("@WebId", webId);
+            await delPrices.ExecuteNonQueryAsync();
+        }
+
+        await using (var delDetail = new SqliteCommand("DELETE FROM DrugDetails WHERE WebId = @WebId", conn, (SqliteTransaction)tx))
+        {
+            delDetail.Parameters.AddWithValue("@WebId", webId);
+            await delDetail.ExecuteNonQueryAsync();
+        }
+
+
+        await using var del = new SqliteCommand("DELETE FROM Drugs WHERE Id = @Id", conn, (SqliteTransaction)tx);
+        del.Parameters.AddWithValue("@Id", id);
+        int rows = await del.ExecuteNonQueryAsync();
+
+        await tx.CommitAsync();
+        return rows > 0;
+    }
+
+    public async Task<DrugDetail?> GetDrugDetailByWebIdAsync(int webId)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        const string sql = @"
+            SELECT WebId, DetailUrl, BrandName, GenericName, DrugForm, RouteOfAdmin,
+                   LicenseHolder, BrandOwner, Manufacturer, LicenseExpiry,
+                   GTIN, IRC, Packaging, Composition, ATCCode, ATCHierarchy, ScrapedAt
+            FROM DrugDetails WHERE WebId = @WebId;";
+
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@WebId", webId);
+        await using var r = await cmd.ExecuteReaderAsync();
+        if (!await r.ReadAsync()) return null;
+
+        return new DrugDetail
+        {
+            WebId = r.GetInt32(0),
+            DetailUrl = r.GetString(1),
+            BrandName = r.GetString(2),
+            GenericName = r.GetString(3),
+            DrugForm = r.GetString(4),
+            RouteOfAdmin = r.GetString(5),
+            LicenseHolder = r.GetString(6),
+            BrandOwner = r.GetString(7),
+            Manufacturer = r.GetString(8),
+            LicenseExpiry = r.GetString(9),
+            GTIN = r.GetString(10),
+            IRC = r.GetString(11),
+            Packaging = r.GetString(12),
+            Composition = r.GetString(13),
+            ATCCode = r.GetString(14),
+            ATCHierarchy = JsonSerializer.Deserialize<List<ATCLevel>>(r.GetString(15)) ?? [],
+            ScrapedAt = DateTime.Parse(r.GetString(16))
+        };
+    }
+
+    public async Task<bool> DeleteDrugDetailAsync(int webId)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+
+        await using var del = new SqliteCommand("DELETE FROM DrugDetails WHERE WebId = @WebId", conn, (SqliteTransaction)tx);
+        del.Parameters.AddWithValue("@WebId", webId);
+        int rows = await del.ExecuteNonQueryAsync();
+
+        await using var upd = new SqliteCommand("UPDATE Drugs SET IsDetailScraped = 0 WHERE WebId = @WebId", conn, (SqliteTransaction)tx);
+        upd.Parameters.AddWithValue("@WebId", webId);
+        await upd.ExecuteNonQueryAsync();
+
+        await tx.CommitAsync();
+        return rows > 0;
+    }
+
+    public async Task<(List<PriceRecord> Items, int TotalCount)> GetPriceHistoryAsync(int webId, int skip, int take)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        await using var countCmd = new SqliteCommand("SELECT COUNT(*) FROM PriceHistory WHERE WebId = @WebId;", conn);
+        countCmd.Parameters.AddWithValue("@WebId", webId);
+        int total = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+
+        const string sql = @"
+            SELECT Id, WebId, PackagePrice, UnitPrice, UnitCount, Source, RecordedAt
+            FROM PriceHistory WHERE WebId = @WebId
+            ORDER BY RecordedAt DESC
+            LIMIT @take OFFSET @skip;";
+
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@WebId", webId);
+        cmd.Parameters.AddWithValue("@take", take);
+        cmd.Parameters.AddWithValue("@skip", skip);
+
+        var items = new List<PriceRecord>();
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync()) items.Add(ReadPriceRecord(r));
+
+        return (items, total);
+    }
+
+    public async Task<PriceRecord?> GetPriceRecordByIdAsync(int id)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        const string sql = @"
+            SELECT Id, WebId, PackagePrice, UnitPrice, UnitCount, Source, RecordedAt
+            FROM PriceHistory WHERE Id = @Id;";
+
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@Id", id);
+        await using var r = await cmd.ExecuteReaderAsync();
+        return await r.ReadAsync() ? ReadPriceRecord(r) : null;
+    }
+
+    public async Task<int?> CreatePriceRecordManualAsync(PriceRecord rec)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        await using (var check = new SqliteCommand("SELECT 1 FROM Drugs WHERE WebId = @WebId", conn))
+        {
+            check.Parameters.AddWithValue("@WebId", rec.WebId);
+            if (await check.ExecuteScalarAsync() is null) return null;
+        }
+
+        const string sql = @"
+            INSERT INTO PriceHistory (WebId, PackagePrice, UnitPrice, UnitCount, Source, RecordedAt)
+            VALUES (@WebId, @PackagePrice, @UnitPrice, @UnitCount, @Source, @RecordedAt);
+            SELECT last_insert_rowid();";
+
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@WebId", rec.WebId);
+        cmd.Parameters.AddWithValue("@PackagePrice", rec.PackagePrice);
+        cmd.Parameters.AddWithValue("@UnitPrice", rec.UnitPrice);
+        cmd.Parameters.AddWithValue("@UnitCount", rec.UnitCount);
+        cmd.Parameters.AddWithValue("@Source", string.IsNullOrWhiteSpace(rec.Source) ? "manual" : rec.Source);
+        cmd.Parameters.AddWithValue("@RecordedAt", (rec.RecordedAt == default ? DateTime.UtcNow : rec.RecordedAt).ToString("o"));
+
+        var result = await cmd.ExecuteScalarAsync();
+        return Convert.ToInt32(result);
+    }
+
+    public async Task<bool> UpdatePriceRecordAsync(int id, PriceRecord rec)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        const string sql = @"
+            UPDATE PriceHistory SET
+                PackagePrice = @PackagePrice, UnitPrice = @UnitPrice,
+                UnitCount = @UnitCount, Source = @Source
+            WHERE Id = @Id;";
+
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@Id", id);
+        cmd.Parameters.AddWithValue("@PackagePrice", rec.PackagePrice);
+        cmd.Parameters.AddWithValue("@UnitPrice", rec.UnitPrice);
+        cmd.Parameters.AddWithValue("@UnitCount", rec.UnitCount);
+        cmd.Parameters.AddWithValue("@Source", string.IsNullOrWhiteSpace(rec.Source) ? "manual" : rec.Source);
+
+        return await cmd.ExecuteNonQueryAsync() > 0;
+    }
+
+    public async Task<bool> DeletePriceRecordAsync(int id)
+    {
+        await using var conn = Open();
+        await conn.OpenAsync();
+
+        await using var cmd = new SqliteCommand("DELETE FROM PriceHistory WHERE Id = @Id;", conn);
+        cmd.Parameters.AddWithValue("@Id", id);
+        return await cmd.ExecuteNonQueryAsync() > 0;
+    }
+
+    // ── Reader helpers ────────────────────────────────────────
+
+    private static DrugRecord ReadDrugRecord(SqliteDataReader r) => new()
+    {
+        Id = r.GetInt32(0),
+        WebId = r.GetInt32(1),
+        PersianName = r.GetString(2),
+        EnglishName = r.GetString(3),
+        BrandOwner = r.GetString(4),
+        LicenseHolder = r.GetString(5),
+        Packaging = r.GetString(6),
+        ProductCode = r.GetString(7),
+        GenericCode = r.GetString(8),
+        DetailUrl = r.GetString(9),
+        SearchTermUsed = r.GetString(10),
+        IsEmergencyLicense = r.GetInt32(11) == 1,
+        IsDetailScraped = r.GetInt32(12) == 1,
+        ScrapedAt = DateTime.Parse(r.GetString(13))
+    };
+
+    private static PriceRecord ReadPriceRecord(SqliteDataReader r) => new()
+    {
+        Id = r.GetInt32(0),
+        WebId = r.GetInt32(1),
+        PackagePrice = r.GetInt64(2),
+        UnitPrice = r.GetInt64(3),
+        UnitCount = r.GetInt32(4),
+        Source = r.GetString(5),
+        RecordedAt = DateTime.Parse(r.GetString(6))
+    };
+
     // ── Internals ─────────────────────────────────────────────
 
     private SqliteConnection Open() => new($"Data Source={_dbPath}");
